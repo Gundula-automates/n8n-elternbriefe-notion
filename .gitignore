@@ -1,0 +1,13 @@
+# Lokale Varianten und Zugangsdaten
+.env
+*.local.json
+*-privat*
+
+# Testdaten und Originalbriefe nie committen
+testdaten/
+Testdaten*/
+*.pdf
+
+# System
+.DS_Store
+Thumbs.db
