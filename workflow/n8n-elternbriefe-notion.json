@@ -1,0 +1,550 @@
+{
+  "name": "n8n-elternbriefe-notion",
+  "nodes": [
+    {
+      "parameters": {
+        "authentication": "n8nUserAuth",
+        "formTitle": "Elternbrief hochladen",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Datei",
+              "fieldType": "file",
+              "acceptFileTypes": ".pdf, .txt, .jpg, .jpeg, .png",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Kind"
+            },
+            {
+              "fieldLabel": "Hinweis"
+            }
+          ]
+        },
+        "options": {
+          "respondWithOptions": {
+            "values": {
+              "formSubmittedText": "Danke, die Datei wird verarbeitet."
+            }
+          },
+          "includeUserInOutput": false
+        }
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [-896, -240],
+      "id": "e7d08f68-62c1-4765-8e68-29f71a1496b1",
+      "name": "Eingang: Upload Formular"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $binary.datei?.mimeType }}",
+                    "rightValue": "application/pdf",
+                    "operator": { "type": "string", "operation": "equals" },
+                    "id": "d85e1a90-1142-471f-b388-8c3744ecf05c"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "PDF"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
+                "conditions": [
+                  {
+                    "id": "16e13d30-4470-48ea-8ef6-4b8298d43463",
+                    "leftValue": "={{ $binary.datei?.mimeType }}",
+                    "rightValue": "image/",
+                    "operator": { "type": "string", "operation": "startsWith" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Bild"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
+                "conditions": [
+                  {
+                    "id": "01595ba7-6da1-4f1d-90fa-c302710247c3",
+                    "leftValue": "={{ $binary.datei?.mimeType }}",
+                    "rightValue": "text/plain",
+                    "operator": { "type": "string", "operation": "equals", "name": "filter.operator.equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Text"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [-416, -256],
+      "id": "97b79b2d-8382-4bc9-ad22-6aebff28d978",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\nfor (const item of $input.all()) {\n  if (item.json.text) out.push({ json: { ...item.json } });\n  for (const k of Object.keys(item.binary ?? {})) {\n    out.push({\n      json: { ...item.json, text: '', dateiname: item.binary[k].fileName },\n      binary: { datei: item.binary[k] }\n    });\n  }\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-576, -240],
+      "id": "5ddf7756-b506-4a5f-989c-4af8e3519e52",
+      "name": "Je Datei ein Eintrag"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "datei",
+        "options": { "joinPages": true }
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [-160, -448],
+      "id": "cf6d124c-6750-4198-87bd-dc3874b66c0b",
+      "name": "PDF auslesen"
+    },
+    {
+      "parameters": {
+        "operation": "text",
+        "binaryPropertyName": "datei",
+        "destinationKey": "text",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [-160, 80],
+      "id": "b8ec90c6-ed2b-4b8c-b923-fe9e582d83e1",
+      "name": "Textdatei auslesen"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "Gib den gesamten Text des Dokuments wörtlich wieder. Keine Ergänzungen.",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "HumanMessagePromptTemplate",
+              "messageType": "imageBinary",
+              "binaryImageDataKey": "datei"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [-208, -240],
+      "id": "f0f79379-83e7-4c9e-b84d-b31d62b185c3",
+      "name": "Bild abschreiben"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "c7e431a4-af38-4b8b-8948-a58b549f4c0b", "name": "=text", "value": "={{ $json.text }}", "type": "string" },
+            { "id": "767f3ab6-ef91-4c43-880e-0b0484634250", "name": "kanal", "value": "={{ $('Je Datei ein Eintrag').item.json.kanal }}", "type": "string" },
+            { "id": "f8080495-6404-4f5d-bd08-b808ae38c045", "name": "betreff", "value": "={{ $('Je Datei ein Eintrag').item.json.betreff }}", "type": "string" },
+            { "id": "078525ba-7836-46b0-bf55-774e00f6695a", "name": "eingangsdatum", "value": "={{ $('Je Datei ein Eintrag').item.json.eingangsdatum }}", "type": "string" },
+            { "id": "5634b384-2bc4-4515-8783-bf95ee50a6e5", "name": "=kind", "value": "={{ $('Je Datei ein Eintrag').item.json.kind }}", "type": "string" },
+            { "id": "85dfd408-2f92-4636-a37f-3746d19e2c01", "name": "dateiname", "value": "={{ $('Je Datei ein Eintrag').item.json.dateiname}}", "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [240, -240],
+      "id": "6f39d5d0-1bcc-4a18-96f9-503545b85d0f",
+      "name": "Text bereitstellen"
+    },
+    {
+      "parameters": { "numberInputs": 3 },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [96, -256],
+      "id": "ba68c122-45c2-4832-bbb9-066afbd41c3b",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "text": "={{ $json.text }}",
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"termine\": { \"type\": \"array\", \"items\": { \"type\": \"object\", \"properties\": {\n      \"titel\": { \"type\": \"string\" },\n      \"datum\": { \"type\": \"string\", \"description\": \"JJJJ-MM-TT\" },\n      \"uhrzeit\": { \"type\": \"string\" } } } },\n    \"aufgaben\": { \"type\": \"array\", \"items\": { \"type\": \"object\", \"properties\": {\n      \"titel\": { \"type\": \"string\" },\n      \"frist\": { \"type\": \"string\", \"description\": \"JJJJ-MM-TT\" } } } }\n  }\n}",
+        "options": {
+          "systemPromptTemplate": "=Du extrahierst Termine und Aufgaben aus Elternbriefen von Schule, Kita oder Verein.\nEingangsdatum des Briefs: {{ $json.eingangsdatum }}\n\n- Datumsformat immer JJJJ-MM-TT.\n- Termin = Ereignis an einem bestimmten Tag. Aufgabe = etwas, das Eltern erledigen müssen.\n- Übernimm keine Namen von Kindern, keine Gesundheitsangaben und keine Zugangsdaten.\n- Übernimm nur, was im Text steht. Erfinde nichts.\n- Wenn nichts gefunden wird, gib leere Listen zurück.\n\n(Showcase-Version: Basis-Prompt. Der im Pilot getestete Prompt enthält weitere Regeln.)"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
+      "typeVersion": 1.2,
+      "position": [576, -240],
+      "id": "189d9fcd-f6e8-440b-b833-db5b73e36d5b",
+      "name": "Termine und Aufgaben erkennen"
+    },
+    {
+      "parameters": { "fieldToSplitOut": "output.termine", "options": {} },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [880, -368],
+      "id": "9c9bfea9-81f3-4347-b39f-7365aebcfe10",
+      "name": "Split Out - Termine"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "4dd7e307-780b-42ec-82e2-b23cb05d0e64", "name": "titel", "value": "={{ $json.titel }}", "type": "string" },
+            { "id": "2e90154a-754e-46a0-a2a3-2406ef46a6bb", "name": "datum", "value": "={{ ($json.datum || '').slice(0, 10) }}", "type": "string" },
+            { "id": "923c623f-a864-4179-a476-51d5c1d92f82", "name": "uhrzeit", "value": "={{ $json.uhrzeit }}", "type": "string" },
+            { "id": "911bb75a-2ae3-43b2-941f-1d503d714ce4", "name": "kind", "value": "={{ ($('Text bereitstellen').item.json.kind || '').trim() || 'Nicht zugeordnet' }}", "type": "string" },
+            { "id": "34039454-9463-4432-ad9e-8527376740f3", "name": "quelle", "value": "={{ $('Text bereitstellen').item.json.dateiname }}", "type": "string" },
+            { "id": "13bfa4d3-4947-4445-be20-a300c953f52c", "name": "status", "value": "Prüfen", "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [1056, -368],
+      "id": "f60af796-1db5-4866-ad9e-768a286fdbdd",
+      "name": "Termin aufbereiten"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "DEINE-TERMINE-DATENBANK-ID",
+          "mode": "id"
+        },
+        "title": "={{ $json.titel }}",
+        "propertiesUi": {
+          "propertyValues": [
+            { "key": "Datum|date", "includeTime": false, "date": "={{ $json.datum }}" },
+            { "key": "Uhrzeit|rich_text", "textContent": "={{ $json.uhrzeit || '–' }}" },
+            { "key": "Kind|select", "selectValue": "={{ $json.kind }}" },
+            { "key": "Dateiname|rich_text", "textContent": "={{ $json.quelle }}" },
+            { "key": "Status|status", "statusValue": "Prüfen" }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [1440, -368],
+      "id": "6b21ba31-64cf-4ab1-aa0d-8d3a3b139156",
+      "name": "Termin anlegen"
+    },
+    {
+      "parameters": { "fieldToSplitOut": "output.aufgaben", "options": {} },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [880, -64],
+      "id": "59c1a042-b4d2-4661-907e-6c76e071dd4d",
+      "name": "Split Out - Aufgaben"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "ff8129d7-73d7-4dc8-beeb-3b3813462bba", "name": "titel", "value": "={{ $json.titel }}", "type": "string" },
+            { "id": "96452362-db89-40ed-b8d1-f1f103ce5041", "name": "frist", "value": "={{ ($json.frist || '').slice(0, 10) }}", "type": "string" },
+            { "id": "0ad8dbea-f0d6-422e-a517-7c0dd60020b9", "name": "kind", "value": "={{ ($('Text bereitstellen').item.json.kind || '').trim() || 'Nicht zugeordnet' }}", "type": "string" },
+            { "id": "1b6321f6-c4df-45e5-8503-13963e643598", "name": "quelle", "value": "={{ ($('Text bereitstellen').item.json.dateiname || '').trim() || 'Unbekannt' }}", "type": "string" },
+            { "id": "922ee6d9-c9f1-4e7b-a5b2-a94a154b9fb5", "name": "status", "value": "Prüfen", "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [1056, -64],
+      "id": "0d144a7a-1b4e-4d7c-a4a3-8e41e5acc433",
+      "name": "Aufgabe aufbereiten"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "DEINE-AUFGABEN-DATENBANK-ID",
+          "mode": "id"
+        },
+        "title": "={{ $json.titel }}",
+        "propertiesUi": {
+          "propertyValues": [
+            { "key": "Frist|date", "includeTime": false, "date": "={{ $json.frist.slice(0,10) }}" },
+            { "key": "Kind|select", "selectValue": "={{ $json.kind }}" },
+            { "key": "Dateiname|rich_text", "textContent": "={{ $json.quelle }}" },
+            { "key": "Status|status", "statusValue": "Prüfen" }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [1440, -128],
+      "id": "7b047369-d987-40a0-838c-121e4f0bca19",
+      "name": "Aufgabe anlegen"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
+          "conditions": [
+            {
+              "id": "45d6e3d5-aed1-4875-a34b-df178c6555b4",
+              "leftValue": "={{ $json.text }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [400, -240],
+      "id": "4527bbc8-82a0-46a4-bdc7-415da92b1874",
+      "name": "Nur Einträge mit Text"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "DEINE-AUFGABEN-DATENBANK-ID",
+          "mode": "id"
+        },
+        "title": "={{ $json.titel }}",
+        "propertiesUi": {
+          "propertyValues": [
+            { "key": "Kind|select", "selectValue": "={{ $json.kind }}" },
+            { "key": "Dateiname|rich_text", "textContent": "={{ $json.quelle }}" },
+            { "key": "Status|status", "statusValue": "Prüfen" },
+            { "key": "Frist laut Brief|rich_text", "textContent": "={{ $json.frist || '–' }}" }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [1440, 48],
+      "id": "314e5d61-7986-42a5-a308-0aafab206733",
+      "name": "Aufgabe anlegen ohne Frist"
+    },
+    {
+      "parameters": {
+        "model": "qwen2.5vl:7b",
+        "options": { "temperature": 0.1 }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [-208, -64],
+      "id": "37a02f26-06eb-4a61-b592-0bd44a23a9a4",
+      "name": "Ollama"
+    },
+    {
+      "parameters": {
+        "model": "llama3.2:latest",
+        "options": { "temperature": 0.1, "numCtx": 8192 }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [688, -80],
+      "id": "73c4a2e3-0eba-46e9-9cd2-27af38643648",
+      "name": "Ollama1"
+    },
+    {
+      "parameters": {
+        "content": "**1 · Eingabe**\nUpload per Formular (PDF, TXT, JPG, PNG), Kind und Hinweis angeben. Je Datei ein Eintrag.",
+        "height": 352,
+        "width": 624
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-912, -336],
+      "id": "0a46151b-4140-4cbf-bb3c-4f3ef68b1cef",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## Elternbriefe → Notion (Pilot)\nErkennt Termine und Aufgaben in Elternbriefen und legt sie in Notion ab.\n**Die KI schlägt vor – Eltern prüfen.** Jeder Eintrag startet mit Status „Prüfen“.\n\nGelb Eingabe · Lila Daten · Grün KI · Blau Ausgabe\n\n**KI im Pilot (Hybrid):** Bilder lokal mit Ollama · Erkennung mit Groq, nur anonymisierte Testbriefe\n\n**Warum Groq?** Im Test mit denselben Briefen hat Groq 10 von 12 Terminen und Aufgaben richtig erkannt, das lokale Ollama-Modell nur 4 von 12. Groq braucht dafür wenige Sekunden je Brief, Ollama auf dem Pilot-Rechner ohne KI-Beschleunigung etwa 7 Minuten.\n\n**Datenschutz:** Testdaten anonymisiert · keine Nutzerdaten im Ablauf · nur 6 Felder nach dem Auslesen · KI-Regel gegen Kindernamen, Gesundheitsangaben, Zugangsdaten\n\n**Vor dem Start:** Notion-Datenbank-IDs und Zugangsdaten eintragen (siehe README).",
+        "height": 336,
+        "width": 624,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-912, -704],
+      "id": "4a297f1e-9a12-4217-a730-ab76fe8c99f3",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "**2 · Extraktion**\nText je Dateityp auslesen und vereinheitlichen. Bilder werden lokal mit Ollama (qwen2.5vl:7b) gelesen. Nur benötigte Felder bleiben erhalten.",
+        "height": 800,
+        "width": 800,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-256, -560],
+      "id": "22d84c4f-2394-4828-a624-05577b49b392",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "**3 · KI-Erkennung**\nTermine und Aufgaben als JSON. Regel an die KI: keine Kindernamen, Gesundheitsangaben oder Zugangsdaten übernehmen (Anweisung, kein Filter).\nPilot: Groq. Alternative lokal: Ollama1.",
+        "height": 464,
+        "width": 256,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [560, -416],
+      "id": "31631c46-6e68-403a-a0da-ab2e8b0ae378",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "**4 · Termine in Notion**\nJeder Termin als Eintrag, Status „Prüfen“.",
+        "height": 224,
+        "width": 784,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [848, -448],
+      "id": "cdea0ce4-e6a9-4190-b996-9e44c8c44f40",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "**5 · Aufgaben in Notion**\nJede Aufgabe als Eintrag, Status „Prüfen“. Ohne erkennbare Frist: Text in „Frist laut Brief“.",
+        "height": 416,
+        "width": 784,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [848, -192],
+      "id": "4b63992c-b8de-48cf-87c5-8cd49fa76aed",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": { "temperature": 0.1 }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [576, -80],
+      "id": "a879e88e-3b10-480b-b703-f2a89f381d49",
+      "name": "Groq"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
+          "conditions": [
+            {
+              "id": "085bae69-2d84-4cc8-8605-0bf774906235",
+              "leftValue": "={{ $json.frist }}",
+              "rightValue": "^\\d{4}-\\d{2}-\\d{2}",
+              "operator": { "type": "string", "operation": "regex" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1232, -64],
+      "id": "1a1cef27-2ee4-4db1-a29c-57ad3a707a9c",
+      "name": "Frist vorhanden?"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "f9c5aca5-ad05-4389-9c2c-991266ea002a", "name": "kanal", "value": "formular", "type": "string" },
+            { "id": "d1f57f53-7c05-4b11-83e8-3807c49e365f", "name": "betreff", "value": "=Upload", "type": "string" },
+            { "id": "665ec08b-8e5f-4fda-b935-4a049f060c04", "name": "eingangsdatum", "value": "={{ $json.submittedAt }}", "type": "string" },
+            { "id": "49f706a3-ba67-4508-968a-d1fc987f5d09", "name": "kind", "value": "={{ $json.Kind }}", "type": "string" },
+            { "id": "08d90c8d-c97e-44c0-b5f0-af0bd0591462", "name": "hinweis", "value": "={{ $json.Hinweis }}", "type": "string" }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [-736, -240],
+      "id": "cf1b7e32-3e6f-43f8-80a4-4f2c3c50daa4",
+      "name": "Daten aufbereiten"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Eingang: Upload Formular": { "main": [[{ "node": "Daten aufbereiten", "type": "main", "index": 0 }]] },
+    "Daten aufbereiten": { "main": [[{ "node": "Je Datei ein Eintrag", "type": "main", "index": 0 }]] },
+    "Je Datei ein Eintrag": { "main": [[{ "node": "Switch", "type": "main", "index": 0 }]] },
+    "Switch": {
+      "main": [
+        [{ "node": "PDF auslesen", "type": "main", "index": 0 }],
+        [{ "node": "Bild abschreiben", "type": "main", "index": 0 }],
+        [{ "node": "Textdatei auslesen", "type": "main", "index": 0 }]
+      ]
+    },
+    "PDF auslesen": { "main": [[{ "node": "Merge", "type": "main", "index": 0 }]] },
+    "Bild abschreiben": { "main": [[{ "node": "Merge", "type": "main", "index": 1 }]] },
+    "Textdatei auslesen": { "main": [[{ "node": "Merge", "type": "main", "index": 2 }]] },
+    "Merge": { "main": [[{ "node": "Text bereitstellen", "type": "main", "index": 0 }]] },
+    "Text bereitstellen": { "main": [[{ "node": "Nur Einträge mit Text", "type": "main", "index": 0 }]] },
+    "Nur Einträge mit Text": { "main": [[{ "node": "Termine und Aufgaben erkennen", "type": "main", "index": 0 }]] },
+    "Termine und Aufgaben erkennen": {
+      "main": [[
+        { "node": "Split Out - Termine", "type": "main", "index": 0 },
+        { "node": "Split Out - Aufgaben", "type": "main", "index": 0 }
+      ]]
+    },
+    "Split Out - Termine": { "main": [[{ "node": "Termin aufbereiten", "type": "main", "index": 0 }]] },
+    "Termin aufbereiten": { "main": [[{ "node": "Termin anlegen", "type": "main", "index": 0 }]] },
+    "Split Out - Aufgaben": { "main": [[{ "node": "Aufgabe aufbereiten", "type": "main", "index": 0 }]] },
+    "Aufgabe aufbereiten": { "main": [[{ "node": "Frist vorhanden?", "type": "main", "index": 0 }]] },
+    "Frist vorhanden?": {
+      "main": [
+        [{ "node": "Aufgabe anlegen", "type": "main", "index": 0 }],
+        [{ "node": "Aufgabe anlegen ohne Frist", "type": "main", "index": 0 }]
+      ]
+    },
+    "Ollama": { "ai_languageModel": [[{ "node": "Bild abschreiben", "type": "ai_languageModel", "index": 0 }]] },
+    "Ollama1": { "ai_languageModel": [[]] },
+    "Groq": { "ai_languageModel": [[{ "node": "Termine und Aufgaben erkennen", "type": "ai_languageModel", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "tags": []
+}
